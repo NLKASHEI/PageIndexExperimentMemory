@@ -79,7 +79,7 @@ async function syncHidden(ctx) {
     return changed;
 }
 
-export function installAutomation(panel, post, recall) {
+export function installAutomation(panel, post, recall, canRecall) {
     const controls = {
         hide: panel.querySelector('[data-auto-hide]'),
         recall: panel.querySelector('[data-auto-recall]'),
@@ -181,7 +181,9 @@ export function installAutomation(panel, post, recall) {
         return queue;
     }
 
-    const sync = () => enqueue(syncHidden);
+    const sync = () => enqueue(ctx => {
+        if (!settings(ctx).hide || canRecall()) return syncHidden(ctx);
+    });
     const onChatChanged = () => {
         clear();
         receipt = undefined;
@@ -201,6 +203,7 @@ export function installAutomation(panel, post, recall) {
         // TavernHelper includes its own request ID, while native Stop emits no ID.
         if (generationId === undefined) clear();
     });
+    panel.querySelector('[data-runtime]').addEventListener('change', onChatChanged);
     for (const control of Object.values(controls)) control.addEventListener('change', () => {
         const next = {
             hide: controls.hide.checked,
@@ -211,7 +214,8 @@ export function installAutomation(panel, post, recall) {
         clear();
         void enqueue(async ctx => {
             ctx.chatMetadata[SETTINGS_KEY] = next;
-            if (!await syncHidden(ctx)) await ctx.saveChat();
+            const canSync = !next.hide || canRecall();
+            if (!canSync || !await syncHidden(ctx)) await ctx.saveChat();
             if (chatKey(ctx) === chatKey(context())) refreshControls();
         });
     });
@@ -228,7 +232,7 @@ export function installAutomation(panel, post, recall) {
         }
         clear();
         const ctx = context();
-        if (!settings(ctx).recall) return;
+        if (!settings(ctx).recall || !canRecall()) return;
         const promptUser = promptChat.findLastIndex(message => message.is_user && !message.is_system);
         if (promptUser < 0) return;
         const last = ctx.chat.at(-1);

@@ -6,6 +6,7 @@
 #floor-recall[open] > [data-float-handle] { position: sticky; top: -.45rem; background: var(--SmartThemeBlurTintColor, #24242a); z-index: 1; }
 #floor-recall summary { cursor: pointer; }
 #floor-recall form { margin-top: .55rem; }
+#floor-recall > [hidden] { display: none; }
 #floor-recall textarea { display: block; width: 100%; box-sizing: border-box; }
 #floor-recall [data-result] { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 35vh; overflow: auto; }
 #floor-recall .floor-recall-controls { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .65rem; margin-top: .4rem; }

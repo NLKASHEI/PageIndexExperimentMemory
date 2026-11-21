@@ -1,14 +1,23 @@
 import { getRequestHeaders } from '/script.js';
+import { getStringHash } from '/scripts/utils.js';
 import { archiveFloors } from './recall.js';
 import { installAutomation } from './automation.js';
 import { installModelPanel } from './panels.js';
 import { installFloatingPanel } from './floating.js';
+import { browserModelAvailable, openTavernConnection } from './browser/model.js';
+import { browserIntent, browserRecall } from './browser/recall.js';
+
+const RUNTIME_KEY = 'floor-recall-runtime';
+let runtime = 'browser';
+try {
+    if (localStorage.getItem(RUNTIME_KEY) === 'native') runtime = 'native';
+} catch {}
 
 function identity(context) {
     return JSON.stringify([context.groupId ?? null, context.groupId ? null : context.characterId, context.chatId]);
 }
 
-async function post(route, body, signal) {
+async function postNative(route, body, signal) {
     const local = ['http://127.0.0.1:8000', 'http://localhost:8000'].includes(location.origin);
     const base = local ? 'http://127.0.0.1:17655' : '/api/plugins/floor-recall';
     const headers = local ? {'Content-Type': 'application/json'} : getRequestHeaders();
@@ -25,7 +34,14 @@ async function post(route, body, signal) {
     return result;
 }
 
+function post(route, body, signal) {
+    if (runtime === 'native') return postNative(route, body, signal);
+    const connection = openTavernConnection();
+    return route === 'intent' ? browserIntent(body, connection, signal) : browserRecall(body, connection, signal);
+}
+
 async function digestText(text) {
+    if (!globalThis.crypto?.subtle) return String(getStringHash(text));
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -33,7 +49,7 @@ async function digestText(text) {
 async function recallWithPageIndex(chat, question, bm25f, signal, chatScope, recent = [], retry = false) {
     const records = archiveFloors(chat);
     let revision;
-    if (globalThis.crypto?.subtle) {
+    if (globalThis.crypto?.subtle || runtime === 'browser') {
         for (let start = 0; start < chat.length; start += 64) {
             signal.throwIfAborted();
             await Promise.all(chat.slice(start, start + 64).map(async ({mes, name, is_user, swipe_id}, offset) => {
@@ -71,7 +87,15 @@ function mount() {
             </div>
             <p data-retry-status role="status" hidden></p>
         </details>
-        <details class="floor-recall-drawer" data-model-panel>
+        <div class="floor-recall-drawer">
+            <label class="floor-recall-profile-picker">检索运行方式
+                <select data-runtime class="text_pole">
+                    <option value="browser">浏览器 · 沿用酒馆的 API 连接</option>
+                    <option value="native">原生 PageIndex · 本机桥接</option>
+                </select>
+            </label>
+        </div>
+        <details class="floor-recall-drawer" data-model-panel hidden>
             <summary>检索 API</summary>
             <label class="floor-recall-profile-picker">当前连接
                 <select name="apiProfile" class="text_pole" disabled><option>正在读取方案…</option></select>
@@ -88,8 +112,21 @@ function mount() {
         </details>`;
     document.body.append(panel);
     installFloatingPanel(panel);
-    installAutomation(panel, post, recallWithPageIndex);
-    installModelPanel(panel, post);
+    const mode = panel.querySelector('[data-runtime]');
+    const nativePanel = panel.querySelector('[data-model-panel]');
+    function showRuntime() {
+        mode.value = runtime;
+        nativePanel.hidden = runtime !== 'native';
+        if (nativePanel.hidden) nativePanel.open = false;
+    }
+    showRuntime();
+    mode.addEventListener('change', () => {
+        runtime = mode.value;
+        try { localStorage.setItem(RUNTIME_KEY, runtime); } catch {}
+        showRuntime();
+    });
+    installAutomation(panel, post, recallWithPageIndex, () => runtime === 'native' || browserModelAvailable());
+    installModelPanel(panel, postNative);
     const form = panel.querySelector(':scope > form');
     const questionBox = panel.querySelector('textarea');
     const submit = panel.querySelector('[type=submit]');
@@ -109,6 +146,7 @@ function mount() {
     for (const type of ['CHAT_CHANGED', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_UPDATED']) {
         if (events?.[type]) context.eventSource.on(events[type], invalidate);
     }
+    mode.addEventListener('change', invalidate);
     cancel.addEventListener('click', invalidate);
     form.addEventListener('submit', async event => {
         event.preventDefault();
