@@ -1,0 +1,55 @@
+#floor-recall { position: fixed; z-index: 3000; right: 1rem; top: calc(100vh - 4rem); top: calc(100dvh - 4rem); transform: translateY(-100%); box-sizing: border-box; max-width: calc(100vw - 2rem); color: var(--SmartThemeBodyColor, #eee); background: var(--SmartThemeBlurTintColor, #24242a); border: 1px solid var(--SmartThemeBorderColor, #888); border-radius: .5rem; padding: .45rem .65rem; backdrop-filter: blur(12px); }
+#floor-recall[open] { width: min(31rem, calc(100vw - 2rem)); }
+#floor-recall[data-positioned] { right: auto; bottom: auto; transform: none; max-width: calc(var(--floor-recall-viewport-width, 100vw) - 16px); }
+#floor-recall > [data-float-handle] { min-height: 2rem; line-height: 2rem; touch-action: none; user-select: none; cursor: grab; }
+#floor-recall > [data-float-handle]:active { cursor: grabbing; }
+#floor-recall[open] > [data-float-handle] { position: sticky; top: -.45rem; background: var(--SmartThemeBlurTintColor, #24242a); z-index: 1; }
+#floor-recall summary { cursor: pointer; }
+#floor-recall form { margin-top: .55rem; }
+#floor-recall textarea { display: block; width: 100%; box-sizing: border-box; }
+#floor-recall [data-result] { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 35vh; overflow: auto; }
+#floor-recall .floor-recall-controls { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .65rem; margin-top: .4rem; }
+#floor-recall .floor-recall-controls label { margin-right: auto; }
+#floor-recall .floor-recall-hints { opacity: .82; font-size: .9em; }
+#floor-recall .floor-recall-controls label, #floor-recall .floor-recall-controls button { white-space: nowrap; }
+#floor-recall .floor-recall-controls button { flex: 0 0 auto; width: auto; min-width: max-content; }
+#floor-recall [data-keep] { width: 4rem; }
+#floor-recall[open] { max-height: min(calc(var(--floor-recall-viewport-height, 100vh) - 5rem), 52rem); overflow: auto; overscroll-behavior: contain; }
+#floor-recall .floor-recall-drawer { border-top: 1px solid var(--SmartThemeBorderColor, #888); margin-top: .55rem; padding-top: .45rem; }
+#floor-recall [data-injected-content] { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 23vh; overflow: auto; margin: .35rem 0; }
+#floor-recall input:not([type=checkbox]), #floor-recall textarea, #floor-recall select {
+    color: var(--SmartThemeBodyColor, #f0f0f2);
+    background-color: color-mix(in srgb, var(--SmartThemeBlurTintColor, #202126) 88%, var(--SmartThemeBodyColor, #f0f0f2));
+    border: 1px solid var(--SmartThemeBorderColor, #64666d);
+    border-radius: .3rem;
+    padding: .28rem .4rem;
+}
+#floor-recall .floor-recall-controls label { display: inline-flex; align-items: center; flex-flow: row nowrap; gap: .35rem; margin-right: 0; }
+#floor-recall .floor-recall-controls input[type=checkbox] { margin: 0; }
+#floor-recall [data-model-panel] [hidden], #floor-recall [data-inspector] [hidden] { display: none; }
+#floor-recall .floor-recall-profile-picker { display: block; margin-top: .35rem; }
+#floor-recall .floor-recall-profile-picker select { display: block; width: 100%; }
+#floor-recall [data-profile-info] { margin: .25rem 0; overflow-wrap: anywhere; }
+#floor-recall [data-model-status]:empty, .floor-recall-dialog [data-dialog-status]:empty { display: none; }
+
+.floor-recall-dialog { display: grid; gap: .65rem; }
+.floor-recall-dialog h3, .floor-recall-dialog p { margin: 0; overflow-wrap: anywhere; }
+.floor-recall-dialog [hidden] { display: none; }
+.floor-recall-dialog label { display: block; min-width: 0; }
+.floor-recall-dialog label[hidden] { display: none; }
+.floor-recall-dialog .text_pole { width: 100%; box-sizing: border-box; }
+.floor-recall-dialog-grid, .floor-recall-dialog-row { display: grid; align-items: end; gap: .55rem; }
+.floor-recall-dialog-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); }
+.floor-recall-dialog-row { grid-template-columns: minmax(0, 1fr) auto; }
+.floor-recall-dialog .menu_button { width: auto; margin: 0; justify-self: start; white-space: nowrap; }
+.floor-recall-dialog [data-api-key] { -webkit-text-security: disc; }
+@supports not (-webkit-text-security: disc) {
+    .floor-recall-dialog input[data-api-key] { color: transparent; caret-color: var(--SmartThemeBodyColor, #eee); }
+}
+
+@media (pointer: coarse) {
+    #floor-recall > [data-float-handle] { min-height: 2.75rem; line-height: 2.75rem; }
+    #floor-recall .floor-recall-controls button { min-height: 2.75rem; }
+    #floor-recall textarea, #floor-recall input:not([type=checkbox]), #floor-recall select,
+    .floor-recall-dialog .text_pole { font-size: 16px; }
+}

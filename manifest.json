@@ -1,0 +1,11 @@
+{
+  "display_name": "楼层回溯",
+  "loading_order": 45,
+  "js": "index.js",
+  "css": "style.css",
+  "generate_interceptor": "floorRecallBeforeGenerate",
+  "author": "NLKASHEI",
+  "homePage": "https://github.com/NLKASHEI/PageIndexExperimentMemory",
+  "version": "0.15.2",
+  "minimum_client_version": "1.18.0"
+}

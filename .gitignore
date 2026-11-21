@@ -1,0 +1,8 @@
+__pycache__/
+.venv/
+*.pyc
+*.sqlite3
+*.sqlite3-*
+.env
+floor-recall-model.json
+floor-recall-model.key
