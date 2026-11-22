@@ -7,7 +7,7 @@ const STORAGE = 'floor-recall-browser-v1:notes';
 
 export function resultKey(request, connection) {
     if (!request.chat_scope || !request.archive_revision) return null;
-    return JSON.stringify([request.chat_scope, request.archive_revision, request.question,
+    return JSON.stringify([request.chat_scope, request.archive_revision, request.directory_revision, request.question,
         request.recent, request.bm25f, connection.modelKey]);
 }
 

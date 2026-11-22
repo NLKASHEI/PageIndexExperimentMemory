@@ -1,66 +1,33 @@
-import { getRequestHeaders } from '/script.js';
 import { getStringHash } from '/scripts/utils.js';
-import { archiveFloors } from './recall.js';
+import { archiveFloors, chatKey } from './recall.js';
 import { installAutomation } from './automation.js';
-import { installModelPanel } from './panels.js';
 import { installFloatingPanel } from './floating.js';
-import { browserModelAvailable, openTavernConnection } from './browser/model.js';
+import { browserModelAvailable, installModelPicker, openTavernConnection } from './browser/model.js';
 import { browserIntent, browserRecall } from './browser/recall.js';
-
-const RUNTIME_KEY = 'floor-recall-runtime';
-let runtime = 'browser';
-try {
-    if (localStorage.getItem(RUNTIME_KEY) === 'native') runtime = 'native';
-} catch {}
-
-function identity(context) {
-    return JSON.stringify([context.groupId ?? null, context.groupId ? null : context.characterId, context.chatId]);
-}
-
-async function postNative(route, body, signal) {
-    const local = ['http://127.0.0.1:8000', 'http://localhost:8000'].includes(location.origin);
-    const base = local ? 'http://127.0.0.1:17655' : '/api/plugins/floor-recall';
-    const headers = local ? {'Content-Type': 'application/json'} : getRequestHeaders();
-    let response;
-    try {
-        response = await fetch(`${base}/${route}`, {method: 'POST', signal, headers, body: JSON.stringify(body)});
-    } catch (error) {
-        if (signal?.aborted) throw error;
-        throw new Error('无法连接 PageIndex 桥接服务。请核对安装说明和服务是否启动。');
-    }
-    if (!local && response.status === 404) throw new Error('远程访问需要在酒馆服务器安装楼层回溯网关。');
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'PageIndex 服务请求失败。');
-    return result;
-}
+import { installDirectory, messageRevision, savedDirectory } from './browser/directory.js';
 
 function post(route, body, signal) {
-    if (runtime === 'native') return postNative(route, body, signal);
     const connection = openTavernConnection();
     return route === 'intent' ? browserIntent(body, connection, signal) : browserRecall(body, connection, signal);
 }
 
-async function digestText(text) {
-    if (!globalThis.crypto?.subtle) return String(getStringHash(text));
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+async function recallWithPageIndex(chat, question, bm25f, signal, chatScope, recent = [], retry = false) {
+    const ctx = SillyTavern.getContext();
+    const directory = chatKey(ctx) === chatScope ? savedDirectory(ctx) : null;
+    const records = archiveFloors(chat);
+    for (const [floor, record] of records.entries()) {
+        signal.throwIfAborted();
+        const live = ctx.chat[floor];
+        const saved = chat[floor];
+        record.revision = messageRevision(live && live.mes === saved.mes && live.swipe_id === saved.swipe_id &&
+            live.name === saved.name && live.is_user === saved.is_user ? live : saved);
+    }
+    const revision = String(getStringHash(records.map(record => record.revision).join('|')));
+    const directory_revision = directory ? String(getStringHash(JSON.stringify(directory.batches))) : '';
+    return post('recall', {question, bm25f, chat_scope: chatScope, archive_revision: revision, recent, retry,
+        records, directory, directory_revision}, signal);
 }
 
-async function recallWithPageIndex(chat, question, bm25f, signal, chatScope, recent = [], retry = false) {
-    const records = archiveFloors(chat);
-    let revision;
-    if (globalThis.crypto?.subtle || runtime === 'browser') {
-        for (let start = 0; start < chat.length; start += 64) {
-            signal.throwIfAborted();
-            await Promise.all(chat.slice(start, start + 64).map(async ({mes, name, is_user, swipe_id}, offset) => {
-                records[start + offset].revision = await digestText(JSON.stringify([mes, name, is_user, swipe_id]));
-            }));
-        }
-        revision = await digestText(JSON.stringify(records.map(record => record.revision)));
-    }
-    signal.throwIfAborted();
-    return post('recall', {question, bm25f, chat_scope: chatScope, archive_revision: revision, recent, retry, records}, signal);
-}
 function mount() {
     if (document.getElementById('floor-recall')) return;
     const panel = document.createElement('details');
@@ -87,48 +54,37 @@ function mount() {
             </div>
             <p data-retry-status role="status" hidden></p>
         </details>
-        <div class="floor-recall-drawer">
-            <label class="floor-recall-profile-picker">检索运行方式
-                <select data-runtime class="text_pole">
-                    <option value="browser">浏览器 · 沿用酒馆的 API 连接</option>
-                    <option value="native">原生 PageIndex · 本机桥接</option>
+        <details class="floor-recall-drawer" data-directory-panel>
+            <summary>聊天区段目录</summary>
+            <progress data-directory-progress max="1" value="0" aria-label="目录构造进度"></progress>
+            <p data-directory-status role="status"></p>
+            <div class="floor-recall-controls">
+                <button type="button" class="menu_button" data-build-directory>构造目录</button>
+                <button type="button" class="menu_button" data-pause-directory disabled>暂停构造</button>
+            </div>
+        </details>
+        <details class="floor-recall-drawer" data-model-panel>
+            <summary>检索 API</summary>
+            <label class="floor-recall-profile-picker">酒馆连接方案
+                <select data-connection-profile class="text_pole"></select>
+            </label>
+            <label class="floor-recall-profile-picker" hidden>DeepSeek 思考模式
+                <select data-connection-thinking class="text_pole">
+                    <option value="default">跟随方案</option><option value="disabled">关闭</option><option value="enabled">开启</option>
                 </select>
             </label>
-        </div>
-        <details class="floor-recall-drawer" data-model-panel hidden>
-            <summary>检索 API</summary>
-            <label class="floor-recall-profile-picker">当前连接
-                <select name="apiProfile" class="text_pole" disabled><option>正在读取方案…</option></select>
+            <label class="floor-recall-profile-picker" hidden>检索附加 JSON
+                <textarea data-connection-extra class="text_pole" rows="3" placeholder="{}"></textarea>
             </label>
-            <p class="floor-recall-hints" data-profile-info hidden></p>
-            <div class="floor-recall-controls">
-                <button type="button" class="menu_button" data-model-new disabled>新建方案</button>
-                <button type="button" class="menu_button" data-model-edit hidden>编辑方案</button>
-                <button type="button" class="menu_button" data-model-key hidden>密钥</button>
-                <button type="button" class="menu_button" data-model-test hidden>测试连接</button>
-                <button type="button" class="menu_button" data-model-reload hidden>重新读取</button>
-            </div>
             <p data-model-status role="status"></p>
         </details>`;
     document.body.append(panel);
     installFloatingPanel(panel);
-    const mode = panel.querySelector('[data-runtime]');
-    const nativePanel = panel.querySelector('[data-model-panel]');
-    function showRuntime() {
-        mode.value = runtime;
-        nativePanel.hidden = runtime !== 'native';
-        if (nativePanel.hidden) nativePanel.open = false;
-    }
-    showRuntime();
-    mode.addEventListener('change', () => {
-        runtime = mode.value;
-        try { localStorage.setItem(RUNTIME_KEY, runtime); } catch {}
-        showRuntime();
-    });
-    installAutomation(panel, post, recallWithPageIndex, () => runtime === 'native' || browserModelAvailable());
-    installModelPanel(panel, postNative);
+    installModelPicker(panel);
+    installAutomation(panel, post, recallWithPageIndex, browserModelAvailable);
+    installDirectory(panel, openTavernConnection, browserModelAvailable);
     const form = panel.querySelector(':scope > form');
-    const questionBox = panel.querySelector('textarea');
+    const questionBox = form.querySelector('textarea');
     const submit = panel.querySelector('[type=submit]');
     const cancel = panel.querySelector('[data-cancel]');
     const assist = panel.querySelector('[data-bm25f]');
@@ -146,14 +102,14 @@ function mount() {
     for (const type of ['CHAT_CHANGED', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_UPDATED']) {
         if (events?.[type]) context.eventSource.on(events[type], invalidate);
     }
-    mode.addEventListener('change', invalidate);
+    panel.addEventListener('floor-recall-connection-changed', invalidate);
     cancel.addEventListener('click', invalidate);
     form.addEventListener('submit', async event => {
         event.preventDefault();
         const question = questionBox.value.trim();
         const start = SillyTavern.getContext();
         if (!question || !start.chat.length || pending) return;
-        const scope = identity(start);
+        const scope = chatKey(start);
         const startRevision = revision;
         const snapshot = start.chat.map(({mes, swipe_id, is_user, name}) => ({mes, swipe_id, is_user, name}));
         const controller = new AbortController();
@@ -168,7 +124,7 @@ function mount() {
             status.textContent = '正在让 PageIndex 检索当前聊天…';
             const result = await recallWithPageIndex(snapshot, question, assist.checked, controller.signal, scope);
             const now = SillyTavern.getContext();
-            if (controller.signal.aborted || revision !== startRevision || scope !== identity(now) || snapshot.length !== now.chat.length || snapshot.some((message, index) => message.mes !== now.chat[index]?.mes || message.swipe_id !== now.chat[index]?.swipe_id)) {
+            if (controller.signal.aborted || revision !== startRevision || scope !== chatKey(now) || snapshot.length !== now.chat.length || snapshot.some((message, index) => message.mes !== now.chat[index]?.mes || message.swipe_id !== now.chat[index]?.swipe_id)) {
                 status.textContent = '聊天已变化，请重新检索。';
                 return;
             }
@@ -192,7 +148,7 @@ function mount() {
                 output.append(hints);
             }
             status.textContent = result.result_cache_hit ? '已复用核验结果 · 本次检索 0 token' :
-                `扫描 ${snapshot.length} 楼 · ${result.scenes} 个区段 · ${result.engine}${result.bm25f_enabled ? ' + BM25F' : ''} · 读取 ${result.pages_read} 楼`;
+                `档案 ${snapshot.length} 楼 · 已建目录 ${result.indexed_floors} 楼${result.bm25f_enabled ? ' · BM25F 辅助' : ''} · 读取 ${result.pages_read} 楼`;
             if (result.notes_used) status.textContent += ` · 小纪要线索 ${result.notes_used} 条`;
             if (usage?.total_tokens > 0) {
                 status.textContent += ` · ${usage.prompt_tokens.toLocaleString()} 输入 / ${usage.completion_tokens.toLocaleString()} 输出 token`;

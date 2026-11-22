@@ -30,27 +30,12 @@
 #floor-recall [data-model-panel] [hidden], #floor-recall [data-inspector] [hidden] { display: none; }
 #floor-recall .floor-recall-profile-picker { display: block; margin-top: .35rem; }
 #floor-recall .floor-recall-profile-picker select { display: block; width: 100%; }
-#floor-recall [data-profile-info] { margin: .25rem 0; overflow-wrap: anywhere; }
-#floor-recall [data-model-status]:empty, .floor-recall-dialog [data-dialog-status]:empty { display: none; }
-
-.floor-recall-dialog { display: grid; gap: .65rem; }
-.floor-recall-dialog h3, .floor-recall-dialog p { margin: 0; overflow-wrap: anywhere; }
-.floor-recall-dialog [hidden] { display: none; }
-.floor-recall-dialog label { display: block; min-width: 0; }
-.floor-recall-dialog label[hidden] { display: none; }
-.floor-recall-dialog .text_pole { width: 100%; box-sizing: border-box; }
-.floor-recall-dialog-grid, .floor-recall-dialog-row { display: grid; align-items: end; gap: .55rem; }
-.floor-recall-dialog-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); }
-.floor-recall-dialog-row { grid-template-columns: minmax(0, 1fr) auto; }
-.floor-recall-dialog .menu_button { width: auto; margin: 0; justify-self: start; white-space: nowrap; }
-.floor-recall-dialog [data-api-key] { -webkit-text-security: disc; }
-@supports not (-webkit-text-security: disc) {
-    .floor-recall-dialog input[data-api-key] { color: transparent; caret-color: var(--SmartThemeBodyColor, #eee); }
-}
+#floor-recall [data-model-status]:empty { display: none; }
+#floor-recall [data-directory-progress] { display: block; width: 100%; margin-top: .55rem; accent-color: var(--SmartThemeBodyColor, #eee); }
+#floor-recall [data-directory-status] { margin: .35rem 0; overflow-wrap: anywhere; }
 
 @media (pointer: coarse) {
     #floor-recall > [data-float-handle] { min-height: 2.75rem; line-height: 2.75rem; }
     #floor-recall .floor-recall-controls button { min-height: 2.75rem; }
-    #floor-recall textarea, #floor-recall input:not([type=checkbox]), #floor-recall select,
-    .floor-recall-dialog .text_pole { font-size: 16px; }
+    #floor-recall textarea, #floor-recall input:not([type=checkbox]), #floor-recall select { font-size: 16px; }
 }

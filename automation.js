@@ -1,6 +1,6 @@
 import { hideChatMessageRange } from '/scripts/chats.js';
 import { extension_prompt_roles, extension_prompt_types } from '/script.js';
-import { plainMessage } from './recall.js';
+import { chatKey, plainMessage } from './recall.js';
 
 const DEFAULT_KEEP = 30;
 const RECENT_RECALL_WINDOW = 15;
@@ -8,10 +8,6 @@ const SETTINGS_KEY = 'floorRecallSettings';
 const OWNED_HIDE = 'floorRecallAutoHidden';
 const PROMPT_KEY = 'floorRecallEvidence';
 const context = () => SillyTavern.getContext();
-
-function chatKey(ctx) {
-    return JSON.stringify([ctx.groupId ?? null, ctx.groupId ? null : ctx.characterId, ctx.chatId]);
-}
 
 function settings(ctx) {
     const config = ctx.chatMetadata?.[SETTINGS_KEY];
@@ -203,7 +199,7 @@ export function installAutomation(panel, post, recall, canRecall) {
         // TavernHelper includes its own request ID, while native Stop emits no ID.
         if (generationId === undefined) clear();
     });
-    panel.querySelector('[data-runtime]').addEventListener('change', onChatChanged);
+    panel.addEventListener('floor-recall-connection-changed', onChatChanged);
     for (const control of Object.values(controls)) control.addEventListener('change', () => {
         const next = {
             hide: controls.hide.checked,

@@ -1,5 +1,4 @@
 const MAX_FLOOR_CHARS = 2400;
-const ARCHIVE_TEXT_BUDGET = 7_000_000;
 
 export function plainMessage(text) {
     return String(text ?? '')
@@ -11,19 +10,23 @@ export function plainMessage(text) {
         .trim();
 }
 
-function clipFloor(text, limit) {
+export function sampleText(text, limit) {
     if (text.length <= limit) return text;
-    const start = Math.floor((limit - 3) * 2 / 3);
-    const end = limit - start - 3;
-    return text.slice(0, start) + '\n…\n' + text.slice(-end);
+    const span = Math.floor((limit - 6) / 3);
+    const middle = Math.floor((text.length - span) / 2);
+    return [text.slice(0, span), text.slice(middle, middle + span), text.slice(-span)].join('\n…\n');
 }
 
 export function archiveFloors(chat) {
-    const limit = Math.min(MAX_FLOOR_CHARS, Math.floor(ARCHIVE_TEXT_BUDGET / Math.max(chat.length, 1)));
     return chat.map((message, floor) => ({
         floor,
         is_user: message.is_user === true,
         speaker: plainMessage(message.name).replace(/\n/g, ' ').slice(0, 80),
-        text: clipFloor(plainMessage(message.mes), limit),
+        raw: String(message.mes ?? ''),
+        text: plainMessage(sampleText(String(message.mes ?? ''), MAX_FLOOR_CHARS)),
     }));
+}
+
+export function chatKey(ctx) {
+    return JSON.stringify([ctx.groupId ?? null, ctx.groupId ? null : ctx.characterId, ctx.chatId]);
 }

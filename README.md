@@ -1,61 +1,29 @@
 # 楼层回溯 · PageIndexExperimentMemory
 
-SillyTavern 的长剧情回溯扩展。它用 PageIndex 导航聊天历史，回读涉及的原楼层，把简短结论和引用注入本轮输入。可手动查楼，也可随正常生成和重新生成自动触发。BM25F 辅助默认关闭。最近 15 楼由当前上下文处理，自动回溯只查更早的历史。
+SillyTavern 的长剧情回溯扩展。本地维护聊天的区段目录，模型沿树形目录查找相关场景，再回读原楼取证。支持手动查楼、自动回溯和重新生成。BM25F 辅助默认关闭。自动回溯只查近期 15 楼之前的历史。
 
-## 从 GitHub 安装
+## 安装或更新
 
-在 SillyTavern 的 **扩展 → 安装扩展** 粘贴以下地址。需要 SillyTavern 1.18 或更新版本和 Git。如果已经装过另一个「楼层回溯」，先在扩展管理器停用旧副本。
+在 **扩展 → 安装扩展** 粘贴以下地址。已安装的用户可以在扩展管理器更新后刷新页面。支持 SillyTavern 1.18 或更新版本，电脑和手机使用同一安装方式。浮窗标题可以拖动，点击标题可收起。
 
 ```text
 https://github.com/NLKASHEI/PageIndexExperimentMemory
 ```
 
-安装后在右下方点「楼层回溯」展开。拖动标题可移动，点击标题可收起，位置保存在当前浏览器。
+## 检索 API
 
-默认的浏览器模式沿用酒馆当前的 API 连接，需要一个支持工具调用的 Chat Completion 模型。树形目录、原文读楼和引用核对都在浏览器完成，模型请求走酒馆现有接口。安装者无需安装 Python、启动桥接或申请 PageIndex 云端账号。手机本机运行酒馆或用手机访问远程酒馆，都可用同一链接安装。
+默认跟随酒馆当前的 Chat Completion 连接。如果要用独立模型，在酒馆「API 连接」中创建并保存连接方案，再在插件的「检索 API」中选它。官方渠道和自定义 OpenAI 兼容接口均通过酒馆发送，密钥由酒馆保存。检索模型需要支持工具调用。DeepSeek 可单独设置思考模式，自定义接口可附加 JSON 请求参数。意图判断单次输出上限为 1024 token，目录构造和检索单次输出上限为 8092 token。
 
-浏览器模式移植了 PageIndex 的目录导航和按页回读流程。需要官方 Python SDK，或需要继续使用旧版独立检索 API 方案时，可以在面板中切到「原生 PageIndex · 本机桥接」。浏览器模式的结果缓存和小纪要保存在当前浏览器，每个聊天最多 128 条，全库最多 4096 条。小纪要只在同题时提供原楼号。
+## 聊天区段目录
 
-## 可选：启动原生 PageIndex 桥接服务
-
-只有切到「原生 PageIndex · 本机桥接」才需要以下步骤。
-
-以下命令从 SillyTavern 根目录运行，假设使用默认用户、默认端口 8000，以及按当前用户安装。若选择了「所有用户」，把扩展路径改为 `public/scripts/extensions/third-party/PageIndexExperimentMemory`。
-
-**Windows PowerShell**
-
-```powershell
-$extension = '.\data\default-user\extensions\PageIndexExperimentMemory'
-py -3 -m venv .floor-recall-venv
-$python = '.\.floor-recall-venv\Scripts\python.exe'
-& $python -m pip install -r "$extension\bridge\requirements.txt"
-$env:LITELLM_LOCAL_MODEL_COST_MAP = 'True'
-$env:OPENAI_AGENTS_DISABLE_TRACING = '1'
-& $python -B "$extension\bridge\pageindex_server.py" --tavern-root .
-```
-
-**Linux / macOS**
-
-```sh
-ext=./data/default-user/extensions/PageIndexExperimentMemory
-python3 -m venv .floor-recall-venv
-.floor-recall-venv/bin/python -m pip install -r "$ext/bridge/requirements.txt"
-LITELLM_LOCAL_MODEL_COST_MAP=True OPENAI_AGENTS_DISABLE_TRACING=1 \
-  .floor-recall-venv/bin/python -B "$ext/bridge/pageindex_server.py" --tavern-root .
-```
-
-安装依赖完成后，下次只需启动桥接。它监听 `127.0.0.1:17655`，可访问 `http://127.0.0.1:17655/health` 确认状态。检索 API 在回溯面板设置，支持 DeepSeek 和自定义 OpenAI 兼容来源。使用「沿用酒馆」时，酒馆需要已选择可本机访问的 Custom Chat Completion 方案。远程或需要登录的部署可以在扩展内单独配置检索 API。
-
-## Android 原生模式
-
-**手机访问电脑、NAS 或服务器上的酒馆。** 在酒馆主机按上面的步骤启动桥接，再把仓库里的 `server-plugin/floor-recall.mjs` 复制到主机酒馆的 `plugins/`，在该酒馆的 `config.yaml` 打开 `enableServerPlugins: true`，重启酒馆。手机用原来的酒馆地址进入，扩展通过酒馆同源网关访问桥接。网关仅服务 `default-user`。远程使用 HTTPS 时，浏览器也能生成小纪要和结果缓存所需的楼层指纹。普通局域网 HTTP 可检索，指纹相关功能取决于浏览器的安全上下文。
-
-**酒馆也跑在 Android 本机。** 先按官方 Termux 指南安装酒馆。PageIndex 依赖 Linux Python 二进制包，建议在 64 位 Termux 的 Debian proot 中运行桥接。进入 Debian 后安装 `python3 python3-venv git`，把 Termux 中的 SillyTavern 目录绑定进容器，再进入绑定后的目录执行 Linux 步骤。手机浏览器打开 `http://127.0.0.1:8000`。[SillyTavern Android 安装指南](https://docs.sillytavern.app/installation/android-%28termux%29/)
+- 新聊天从头跟进，每累计 24 楼会自动构造一批。已构造的聊天会自动补齐后续满批楼层。
+- 已有聊天可以打开「聊天区段目录」，点「构造目录」补建。模型请求在后台分批运行，正文生成期间等当前批结束后再继续排队。面板显示已构造楼数和当前批次。失败的批次间隔重试，最多重试 3 次，可以暂停后继续。完成、暂停或重试耗尽时随聊天保存已构造内容。旧档目录构造会产生模型用量。
+- 每批按剧情变化划分场景，保存标题、短说明、来源范围和楼层指纹。编辑、删除或换 swipe 后，只使用与当前楼层相符的目录。查楼时可逐级展开目录，并按需读取长楼的原文片段。未建目录时仍可用临时目录查询。
 
 ## 数据位置
 
-- 聊天隐藏状态使用酒馆现有的楼层隐藏功能。回溯结论加入本轮发送给正文模型的上下文。
-- 原生模式的小纪要保存在 `data/default-user/floor-recall-memories.sqlite3`，每个聊天最多 128 条，总计最多 4096 条。检索结果缓存保存在桥接进程内存中。
-- 原生模式的 API 方案保存在 `data/default-user/floor-recall-model.json`。Windows 用当前用户的 DPAPI 保护密钥。Linux/macOS 用同目录、权限为 `0600` 的本机加密密钥 `floor-recall-model.key`。非 Windows 环境迁移时，请妥善保管这两个文件。
+- 目录保存在聊天 JSONL 的 `chat_metadata.floorRecallDirectory` 中。随聊天保存、导出和导入。目录只保存导航信息，引用仍来自聊天的原消息。
+- 检索连接在酒馆账号的扩展设置中。目录和检索在浏览器中运行，模型请求通过酒馆原生服务发送。安装只需要扩展链接。
+- 核验结果缓存保存在浏览器内存。用于同题定位的小纪要保存在浏览器各自的本地存储，每个聊天最多 128 条。
 
-本项目是独立的 SillyTavern 实验扩展，依赖 [VectifyAI PageIndex v0.7.4](https://github.com/VectifyAI/PageIndex/tree/v0.7.4)。[酒馆扩展安装文档](https://docs.sillytavern.app/extensions/) · [酒馆服务端插件文档](https://docs.sillytavern.app/for-contributors/server-plugins/)
+本项目为独立实验扩展，参考 [VectifyAI PageIndex](https://github.com/VectifyAI/PageIndex) 的目录导航、按页回读和引用流程。[酒馆扩展文档](https://docs.sillytavern.app/extensions/) · [酒馆连接方案](https://docs.sillytavern.app/usage/core-concepts/connection-profiles/)
