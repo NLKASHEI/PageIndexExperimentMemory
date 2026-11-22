@@ -1,5 +1,5 @@
 import { getStringHash } from '/scripts/utils.js';
-import { archiveFloors, chatKey } from './recall.js';
+import { archiveFloors, chatKey, storyText } from './recall.js';
 import { installAutomation } from './automation.js';
 import { installFloatingPanel } from './floating.js';
 import { browserModelAvailable, installModelPicker, openTavernConnection } from './browser/model.js';
@@ -15,14 +15,15 @@ async function recallWithPageIndex(chat, question, bm25f, signal, chatScope, rec
     const ctx = SillyTavern.getContext();
     const directory = chatKey(ctx) === chatScope ? savedDirectory(ctx) : null;
     const records = archiveFloors(chat);
-    for (const [floor, record] of records.entries()) {
+    for (const record of records) {
         signal.throwIfAborted();
+        const {floor} = record;
         const live = ctx.chat[floor];
         const saved = chat[floor];
         record.revision = messageRevision(live && live.mes === saved.mes && live.swipe_id === saved.swipe_id &&
             live.name === saved.name && live.is_user === saved.is_user ? live : saved);
     }
-    const revision = String(getStringHash(records.map(record => record.revision).join('|')));
+    const revision = String(getStringHash(records.map(record => `${record.floor}:${record.revision}`).join('|')));
     const directory_revision = directory ? String(getStringHash(JSON.stringify(directory.batches))) : '';
     return post('recall', {question, bm25f, chat_scope: chatScope, archive_revision: revision, recent, retry,
         records, directory, directory_revision}, signal);
@@ -99,7 +100,7 @@ function mount() {
         output.replaceChildren();
     }
     const events = context.eventTypes ?? context.event_types;
-    for (const type of ['CHAT_CHANGED', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_UPDATED']) {
+    for (const type of ['CHAT_CHANGED', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED']) {
         if (events?.[type]) context.eventSource.on(events[type], invalidate);
     }
     panel.addEventListener('floor-recall-connection-changed', invalidate);
@@ -124,7 +125,7 @@ function mount() {
             status.textContent = '正在让 PageIndex 检索当前聊天…';
             const result = await recallWithPageIndex(snapshot, question, assist.checked, controller.signal, scope);
             const now = SillyTavern.getContext();
-            if (controller.signal.aborted || revision !== startRevision || scope !== chatKey(now) || snapshot.length !== now.chat.length || snapshot.some((message, index) => message.mes !== now.chat[index]?.mes || message.swipe_id !== now.chat[index]?.swipe_id)) {
+            if (controller.signal.aborted || revision !== startRevision || scope !== chatKey(now) || snapshot.length !== now.chat.length || snapshot.some((message, index) => storyText(message.mes) !== storyText(now.chat[index]?.mes) || message.swipe_id !== now.chat[index]?.swipe_id)) {
                 status.textContent = '聊天已变化，请重新检索。';
                 return;
             }
@@ -148,7 +149,7 @@ function mount() {
                 output.append(hints);
             }
             status.textContent = result.result_cache_hit ? '已复用核验结果 · 本次检索 0 token' :
-                `档案 ${snapshot.length} 楼 · 已建目录 ${result.indexed_floors} 楼${result.bm25f_enabled ? ' · BM25F 辅助' : ''} · 读取 ${result.pages_read} 楼`;
+                `档案 ${result.total_floors} 楼 · 已建目录 ${result.indexed_floors} 楼${result.bm25f_enabled ? ' · BM25F 辅助' : ''} · 读取 ${result.pages_read} 楼`;
             if (result.notes_used) status.textContent += ` · 小纪要线索 ${result.notes_used} 条`;
             if (usage?.total_tokens > 0) {
                 status.textContent += ` · ${usage.prompt_tokens.toLocaleString()} 输入 / ${usage.completion_tokens.toLocaleString()} 输出 token`;

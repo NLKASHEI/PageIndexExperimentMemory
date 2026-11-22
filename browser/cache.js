@@ -47,7 +47,7 @@ export async function noteFloors(request) {
         const {notes} = await readNotes();
         const question = normalize(request.question);
         const note = notes.find(entry => entry.scope === request.chat_scope && entry.question === question);
-        if (note?.sources.every(([floor, revision]) => request.records[floor]?.revision === revision)) {
+        if (note?.sources.every(([floor, revision]) => request.records.find(record => record.floor === floor)?.revision === revision)) {
             return note.sources.map(([floor]) => floor);
         }
     } catch {}
@@ -56,7 +56,7 @@ export async function noteFloors(request) {
 
 export async function rememberNote(request, result) {
     if (!canStore(request) || !result.floors.length) return;
-    const sources = result.floors.map(floor => [floor, request.records[floor]?.revision]);
+    const sources = result.floors.map(floor => [floor, request.records.find(record => record.floor === floor)?.revision]);
     if (sources.some(([, revision]) => !revision)) return;
     try {
         const {storage, notes} = await readNotes();

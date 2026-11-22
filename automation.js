@@ -1,6 +1,6 @@
 import { hideChatMessageRange } from '/scripts/chats.js';
 import { extension_prompt_roles, extension_prompt_types } from '/script.js';
-import { chatKey, plainMessage } from './recall.js';
+import { chatKey, plainMessage, storyFloors, storyText } from './recall.js';
 
 const DEFAULT_KEEP = 30;
 const RECENT_RECALL_WINDOW = 15;
@@ -26,7 +26,7 @@ function getOwner(message) {
 function samePrefix(snapshot, chat) {
     return snapshot.length <= chat.length && snapshot.every((message, floor) => {
         const current = chat[floor];
-        return current && message.mes === current.mes && message.swipe_id === current.swipe_id &&
+        return current && storyText(message.mes) === storyText(current.mes) && message.swipe_id === current.swipe_id &&
             message.is_user === current.is_user && message.name === current.name;
     });
 }
@@ -42,7 +42,8 @@ async function syncHidden(ctx) {
     if (!ctx.chatId) return false;
     const key = chatKey(ctx);
     const config = settings(ctx);
-    const cutoff = config.hide ? Math.max(0, ctx.chat.length - config.keep) : 0;
+    const floors = storyFloors(ctx.chat);
+    const cutoff = config.hide && floors.length > config.keep ? floors.at(-config.keep).floor : 0;
     const restore = [];
     for (let floor = cutoff; floor < ctx.chat.length; floor++) {
         const message = ctx.chat[floor];
@@ -231,22 +232,24 @@ export function installAutomation(panel, post, recall, canRecall) {
         if (!settings(ctx).recall || !canRecall()) return;
         const promptUser = promptChat.findLastIndex(message => message.is_user && !message.is_system);
         if (promptUser < 0) return;
-        const last = ctx.chat.at(-1);
+        const floors = storyFloors(ctx.chat);
+        const last = floors.at(-1)?.message;
         if (!last?.is_user) return;
-        const historyLength = ctx.chat.length - 1 - RECENT_RECALL_WINDOW;
-        if (historyLength <= 0 || !ctx.chat.slice(0, historyLength).some(message =>
+        const historyCount = floors.length - 1 - RECENT_RECALL_WINDOW;
+        const historyLength = floors[historyCount]?.floor;
+        if (historyCount <= 0 || !floors.slice(0, historyCount).some(({message}) =>
             message.is_system && !Array.isArray(message.extra?.tool_invocations))) {
             status.textContent = '本轮无需查旧楼。';
             return;
         }
-        const question = plainMessage(last.mes).slice(0, 600);
+        const question = plainMessage(storyText(last.mes)).slice(0, 600);
         if (!question || /^(?:继续(?:剧情|写)?|接着(?:写|来)?|continue)[。！!\.\s]*$/i.test(question)) {
             status.textContent = '本轮沿用近期对话。';
             return;
         }
         const key = chatKey(ctx);
-        const recent = ctx.chat.slice(historyLength, -1).filter(message => !message.is_system)
-            .map(message => `${message.is_user ? '玩家' : '角色'}：${plainMessage(message.mes).slice(-160)}`);
+        const recent = floors.slice(historyCount, -1).filter(({message}) => !message.is_system)
+            .map(({message}) => `${message.is_user ? '玩家' : '角色'}：${plainMessage(storyText(message.mes)).slice(-160)}`);
         const snapshot = ctx.chat.map(({mes, swipe_id, is_user, name}) => ({mes, swipe_id, is_user, name}));
         const bm25f = controls.bm25f.checked;
         const alreadyRetried = type === 'regenerate' && receipt?.retried && receipt.snapshot.length === snapshot.length &&
@@ -266,11 +269,11 @@ export function installAutomation(panel, post, recall, canRecall) {
                     status.textContent = '本轮沿用近期对话。';
                     return;
                 }
-                receipt = {key, snapshot, historyLength, question, bm25f, recent: intent.requires_context ? recent.slice(-4) : []};
+                receipt = {key, snapshot, historyLength, userFloor: floors.at(-1).floor, question, bm25f, recent: intent.requires_context ? recent.slice(-4) : []};
             }
             query = question;
             status.textContent = '正在回溯旧楼层…';
-            inspectorQuery.textContent = `第 ${snapshot.length - 1} 楼 · 检索问题：${query}`;
+            inspectorQuery.textContent = `第 ${receipt.userFloor} 楼 · 检索问题：${query}`;
             inspectorContent.textContent = '正在检索…';
             retryButton.hidden = false;
             showRetryStatus();

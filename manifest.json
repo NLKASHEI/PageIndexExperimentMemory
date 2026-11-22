@@ -6,6 +6,6 @@
   "generate_interceptor": "floorRecallBeforeGenerate",
   "author": "NLKASHEI",
   "homePage": "https://github.com/NLKASHEI/PageIndexExperimentMemory",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "minimum_client_version": "1.18.0"
 }

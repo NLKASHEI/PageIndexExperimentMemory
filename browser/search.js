@@ -33,7 +33,7 @@ export function lexicalFloors(records, question) {
             }, 0);
             return sum + rarity[index] * (2.2 * strength) / (1.2 + strength);
         }, 0);
-        return {floor, score};
+        return {floor: records[floor].floor, score};
     }).filter(row => row.score > 0).sort((a, b) => b.score - a.score || b.floor - a.floor).slice(0, 12).map(row => row.floor);
 }
 

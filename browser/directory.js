@@ -1,6 +1,6 @@
 import { isGenerating } from '/script.js';
 import { getStringHash } from '/scripts/utils.js';
-import { chatKey, plainMessage, sampleText } from '../recall.js';
+import { chatKey, plainMessage, sampleText, storyFloors, storyText } from '../recall.js';
 
 const KEY = 'floorRecallDirectory';
 const VERSION = 1;
@@ -15,7 +15,8 @@ export function messageRevision(message) {
     const attributes = JSON.stringify([name ?? '', is_user === true, Number(swipe_id) || 0]);
     const known = fingerprints.get(message);
     if (known && known.mes === mes && known.attributes === attributes) return known.id;
-    const id = `${String(mes ?? '').length}:${getStringHash(String(mes ?? ''), getStringHash(attributes))}`;
+    const text = storyText(mes);
+    const id = `${text.length}:${getStringHash(text, getStringHash(attributes))}`;
     fingerprints.set(message, {mes, attributes, id});
     return id;
 }
@@ -55,7 +56,7 @@ function fallback(records, start, end) {
         const sample = records.slice(floor, Math.min(floor + 8, end)).find(record => record.text);
         if (sample) lines.push(`${sample.floor}楼 ${sample.speaker}：${compact(sample.text, 72)}`);
     }
-    return {node_id: `range-${start}`, title: `第 ${start}–${end - 1} 楼`, start_index: start + 1, end_index: end,
+    return {node_id: `range-${start}`, title: `第 ${records[start].floor}–${records[end - 1].floor} 楼`, start_index: start + 1, end_index: end,
         summary: lines.join('\n')};
 }
 
@@ -83,7 +84,7 @@ export function makeDirectory(records, saved) {
         const children = batches.slice(at, at + BATCHES_PER_GROUP);
         const start = children[0].start_index;
         const end = children.at(-1).end_index;
-        groups.push({node_id: `group-${start}`, title: `第 ${start - 1}–${end - 1} 楼`, start_index: start,
+        groups.push({node_id: `group-${start}`, title: `第 ${records[start - 1].floor}–${records[end - 1].floor} 楼`, start_index: start,
             end_index: end, summary: children.map(child => compact(child.children ? `${child.title}：${child.summary}` : child.summary, 100)).join('\n'),
             children: children.reverse()});
     }
@@ -109,7 +110,7 @@ export function outlineFor(nodes, id, total, indexed) {
 async function describeBatch(messages, start, connection, signal) {
     const end = start + messages.length;
     const lines = messages.map((message, i) =>
-        `#${start + i} ${compact(String(message.name ?? ''), 36)}\n${plainMessage(sampleText(String(message.mes ?? ''), 720))}`);
+        `#${start + i} ${compact(String(message.name ?? ''), 36)}\n${plainMessage(sampleText(storyText(message.mes), 720))}`);
     const prompt = `为一段角色扮演聊天建立可查找剧情的目录。按场景变化分段，连续楼层只属于一个场景，首个场景从 ${start} 楼开始。` +
         '标题写清实际发生的事，摘要写简短的事件、地点、当事人以及变化，供定位。只输出 JSON，形如 ' +
         '{"title":"整个区段的主要事件","scenes":[{"start":首楼号,"title":"场景标题","summary":"定位说明"}]}。\n\n' + lines.join('\n\n');
@@ -130,12 +131,12 @@ async function describeBatch(messages, start, connection, signal) {
         ({start: scene.start, title: compact(scene.title, 48), summary: compact(scene.summary, 120)}))};
 }
 
-function pendingBatches(ctx, state, fullOnly) {
+function pendingBatches(floors, state, fullOnly) {
     const ranges = [];
     let indexed = 0;
-    for (let start = 0; start < ctx.chat.length; start += BATCH) {
-        const end = Math.min(start + BATCH, ctx.chat.length);
-        const batch = acceptedBatch(state, start, end, floor => messageRevision(ctx.chat[floor]));
+    for (let start = 0; start < floors.length; start += BATCH) {
+        const end = Math.min(start + BATCH, floors.length);
+        const batch = acceptedBatch(state, start, end, floor => messageRevision(floors[floor].message));
         indexed += batch ? batch.end - start : 0;
         if (batch?.end !== end && (!fullOnly || end - start === BATCH)) ranges.push({start, end});
     }
@@ -171,11 +172,12 @@ export function installDirectory(panel, openConnection, canRecall) {
     function render() {
         const ctx = context();
         const state = savedDirectory(ctx);
-        const {indexed} = pendingBatches(ctx, state, false);
-        progress.max = ctx.chat.length || 1;
+        const floors = storyFloors(ctx.chat);
+        const {indexed} = pendingBatches(floors, state, false);
+        progress.max = floors.length || 1;
         progress.value = indexed;
         const plan = job?.key === chatKey(ctx) ? job : null;
-        const total = ctx.chat.length;
+        const total = floors.length;
         const hint = state ? `新满 ${BATCH} 楼后自动更新。` : '已有聊天点「构造目录」开始分批处理。';
         const activeLabel = plan && [`第 ${plan.batch} / ${plan.total} 批`, plan.waiting && '等待正文生成完成',
             plan.retry && `重试 ${plan.retry} / ${RETRY_DELAYS.length}`].filter(Boolean).join(' · ');
@@ -203,7 +205,7 @@ export function installDirectory(panel, openConnection, canRecall) {
             if (manual) { outcome = '请先选择可用的检索模型。'; render(); }
             return;
         }
-        const {ranges} = pendingBatches(ctx, prior, !manual);
+        const {ranges} = pendingBatches(storyFloors(ctx.chat), prior, !manual);
         if (!ranges.length) { render(); return; }
         const state = getOrCreate(ctx);
         state.paused = false;
@@ -217,13 +219,13 @@ export function installDirectory(panel, openConnection, canRecall) {
             for (const [index, {start, end}] of ranges.entries()) {
                 signal.throwIfAborted();
                 runState.batch = index + 1;
-                const messages = context().chat.slice(start, end);
+                const messages = storyFloors(context().chat).slice(start, end).map(row => row.message);
                 const revisions = messages.map(messageRevision);
                 function checkSource() {
                     signal.throwIfAborted();
-                    const active = context();
-                    if (!current() || messages.length !== end - start || active.chat.length < end ||
-                        revisions.some((value, i) => value !== messageRevision(active.chat[start + i]))) {
+                    const active = storyFloors(context().chat);
+                    if (!current() || messages.length !== end - start || active.length < end ||
+                        revisions.some((value, i) => value !== messageRevision(active[start + i].message))) {
                         throw new Error('楼层已变化，请继续构造以重建受影响的区段。');
                     }
                 }
@@ -284,6 +286,7 @@ export function installDirectory(panel, openConnection, canRecall) {
     function enter() {
         const ctx = context();
         const key = chatKey(ctx);
+        const floors = storyFloors(ctx.chat);
         if (job && job.key !== key) job.controller.abort(new Error('切换聊天，已停止当前构造。'));
         outcome = '';
         const draft = drafts.get(key);
@@ -292,11 +295,11 @@ export function installDirectory(panel, openConnection, canRecall) {
             const state = getOrCreate(ctx);
             for (const [key, batch] of Object.entries(draft.batches)) {
                 const start = Number(key);
-                const end = Math.min(start + BATCH, ctx.chat.length);
-                if (acceptedBatch(draft, start, end, floor => messageRevision(ctx.chat[floor]))) state.batches[key] = batch;
+                const end = Math.min(start + BATCH, floors.length);
+                if (acceptedBatch(draft, start, end, floor => messageRevision(floors[floor].message))) state.batches[key] = batch;
             }
         }
-        if (ctx.chatId && ctx.chat.length <= 2) getOrCreate(ctx);
+        if (ctx.chatId && floors.length <= 2) getOrCreate(ctx);
         render();
         queue();
     }

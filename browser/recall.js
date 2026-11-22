@@ -10,7 +10,7 @@ const ENGINE = 'PageIndex 流程（浏览器）';
 const SYSTEM = '你负责找出酒馆本轮用得上的历史背景。玩家下达行动或续写指令时，回溯相关的既有剧情。'
     + '玩家直接询问历史时，回答所问的历史事实。'
     + '用 PageIndex 的目录和读页工具查当前聊天。小纪要和候选楼层用于定位，回读原文取证，按需要跨区段扩查。'
-    + '同等相关时从新到旧，有明确时间要求时按题意查找。原楼层号等于页码减 1。'
+    + '同等相关时从新到旧，有明确时间要求时按题意查找。引用使用读页工具标注的原楼层号。'
     + `返回一个 JSON 对象。answer 是面向本轮的历史结论，最多 ${MAX_ANSWER_CHARS} 字。`
     + 'evidence 最多 5 条，填写支持结论的原楼层号和逐字短引文（建议 8–32 字）。'
     + '格式为 {"evidence":[{"floor":0,"quote":"已读原文短句"}],"answer":"本轮需要的历史背景"}。';
@@ -139,12 +139,14 @@ function promptFor(request, bm25f, notes) {
     const anchors = queryAnchors(records, question);
     const candidates = bm25f.length ? bm25f : [...anchors.keys()].slice(0, 12);
     const hints = candidates.map(floor => {
-        const text = records[floor].text;
+        const page = records.findIndex(record => record.floor === floor);
+        const text = records[page].text;
         const start = Math.max(0, Math.min((anchors.get(floor)?.at ?? 0) - 26, text.length - 80));
-        return `楼 ${floor}（页 ${floor + 1}）：${text.slice(start, start + 80).replace(/\s+/g, ' ')}`;
+        return `楼 ${floor}（页 ${page + 1}）：${text.slice(start, start + 80).replace(/\s+/g, ' ')}`;
     });
     const parts = [];
-    if (notes.length) parts.push(`同题小纪要引用的原楼（定位线索）：${notes.map(floor => `${floor} 楼（页 ${floor + 1}）`).join('、')}`);
+    if (notes.length) parts.push(`同题小纪要引用的原楼（定位线索）：${notes.map(floor =>
+        `${floor} 楼（页 ${records.findIndex(record => record.floor === floor) + 1}）`).join('、')}`);
     if (hints.length) parts.push(`${bm25f.length ? 'BM25F 排序后的候选' : '字面匹配候选'}（定位线索）：\n${hints.join('\n')}`);
     if (recent?.length) parts.push('近期对话（指代上下文）：\n' + recent.slice(-4).map(line => line.slice(0, 140)).join('\n'));
     parts.push('玩家本轮输入：' + question);
@@ -198,7 +200,7 @@ export async function browserRecall(request, connection, signal) {
             usage.total_tokens ||= usage.prompt_tokens + usage.completion_tokens;
             usage.request_usage_entries = meters;
             const result = {engine: ENGINE, answer: floors.length ? answer : '没有找到可核对的楼层证据。', floors,
-                first_read_floors: firstReadFloors, scenes: tree.nodes.length, indexed_floors: tree.indexed, calls, pages_read: read.size,
+                first_read_floors: firstReadFloors, scenes: tree.nodes.length, indexed_floors: tree.indexed, total_floors: records.length, calls, pages_read: read.size,
                 tools: [...tools], usage, bm25f_enabled: request.bm25f, bm25f_floors: bm25f, notes_used: Number(notes.length > 0)};
             rememberResult(key, result);
             await rememberNote(request, result);
@@ -216,7 +218,7 @@ export async function browserRecall(request, connection, signal) {
                     output = outlineFor(tree.nodes, args.node_id, records.length, tree.indexed);
                 } else if (name === 'get_page_content') {
                     output = readPages(records, args, read);
-                    if (!firstReadFloors.length) firstReadFloors = output.content.map(item => item.page - 1);
+                    if (!firstReadFloors.length) firstReadFloors = output.content.map(item => records[item.page - 1].floor);
                 } else {
                     throw new Error('可以读取区段目录或回读指定页。');
                 }
