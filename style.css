@@ -30,6 +30,7 @@
 #floor-recall [data-model-panel] [hidden], #floor-recall [data-inspector] [hidden] { display: none; }
 #floor-recall .floor-recall-profile-picker { display: block; margin-top: .35rem; }
 #floor-recall .floor-recall-profile-picker select { display: block; width: 100%; }
+#floor-recall [data-custom-connection] input { display: block; width: 100%; box-sizing: border-box; }
 #floor-recall [data-model-status]:empty { display: none; }
 #floor-recall [data-directory-progress] { display: block; width: 100%; margin-top: .55rem; accent-color: var(--SmartThemeBodyColor, #eee); }
 #floor-recall [data-directory-status] { margin: .35rem 0; overflow-wrap: anywhere; }

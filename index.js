@@ -66,9 +66,23 @@ function mount() {
         </details>
         <details class="floor-recall-drawer" data-model-panel>
             <summary>检索 API</summary>
-            <label class="floor-recall-profile-picker">酒馆连接方案
+            <label class="floor-recall-profile-picker">连接方案
                 <select data-connection-profile class="text_pole"></select>
             </label>
+            <div class="floor-recall-controls"><button type="button" class="menu_button" data-connection-new>新建自定义方案</button></div>
+            <section data-custom-connection hidden>
+                <label class="floor-recall-profile-picker">方案名称<input class="text_pole" data-custom-name type="text" maxlength="60"></label>
+                <label class="floor-recall-profile-picker">API 地址<input class="text_pole" data-custom-url type="url" placeholder="https://example.com/v1"></label>
+                <label class="floor-recall-profile-picker">API 密钥<input class="text_pole" data-custom-key type="password" autocomplete="new-password" placeholder="留空沿用已保存密钥"></label>
+                <label class="floor-recall-profile-picker">模型 ID<input class="text_pole" data-custom-model type="text" placeholder="可手动填写"></label>
+                <label class="floor-recall-profile-picker" data-custom-model-list hidden>从列表选模型<select class="text_pole" data-custom-models></select></label>
+                <div class="floor-recall-controls">
+                    <button type="button" class="menu_button" data-custom-fetch>获取模型列表</button>
+                    <button type="button" class="menu_button" data-custom-save>保存方案</button>
+                    <button type="button" class="menu_button" data-custom-copy>另存为</button>
+                    <button type="button" class="menu_button" data-custom-delete>删除方案</button>
+                </div>
+            </section>
             <label class="floor-recall-profile-picker" hidden>DeepSeek 思考模式
                 <select data-connection-thinking class="text_pole">
                     <option value="default">跟随方案</option><option value="disabled">关闭</option><option value="enabled">开启</option>
